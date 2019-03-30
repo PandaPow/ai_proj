@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 
 Datasets/
+/twitter_api/twitter_access_keys.txt
