@@ -1,8 +1,8 @@
 import numpy
 import datetime
 
-# from keras.models import Sequential
-# from keras.layers import Dense
+from keras.models import Sequential
+from keras.layers import Dense
 
 # data: one stock
 # this is what the net should be outputting: 1 for increase, 0 for same/decrease
@@ -12,7 +12,6 @@ stock_size = len(stock_date)
 stock_open = dataset[:,1].astype(numpy.float)
 stock_close = dataset[:,4].astype(numpy.float)
 stock_direction = numpy.zeros(stock_size, dtype='int')
-stock_size = len(stock_date)
 
 for i, item in enumerate(stock_direction):
     if (stock_close[i] - stock_open[i] > 0):
@@ -27,26 +26,70 @@ net1_name = inputdata[:,1]
 net1_sentiment = inputdata[:,2].astype(numpy.int)
 net1_size = len(net1_date)
 
-# get the stock data corresponding to net1's data
-net1_direction = numpy.zeros(net1_size, dtype='int')
+# set up arrays that will be used to train the net
+numDays = len(set(net1_date))
+net2_sentiment = numpy.zeros(numDays)
+net2_day = numpy.zeros(numDays).astype(str)
+net2_yesterdayDirection = numpy.zeros(numDays, dtype='int')
+net2_result = numpy.zeros(numDays, dtype='int')
+
+# add up sentiment 'percentage' for one day
+indxNumDays = 0
 for i, day in enumerate(net1_date):
-    if(day in stock_date):
+    if (day != ''):
+        goodTweet = 0
+        badTweet = 0
+        if (net1_sentiment[i]):
+            goodTweet += 1
+        else:
+            badTweet += 1
+        net1_date[i] = ''
+        net1_name[i] = ''
+        net1_sentiment[i] = -1
+
+        for j, checkDay in enumerate(net1_date):
+            if (i != j and day == checkDay):
+                if (net1_sentiment[j]):
+                    goodTweet += 1
+                else:
+                    badTweet += 1
+                net1_date[j] = ''
+                net1_name[j] = ''
+                net1_sentiment[j] = -1
+        totalTweets = goodTweet + badTweet
+        net2_sentiment[indxNumDays] = goodTweet/totalTweets
+        net2_day[indxNumDays] = day
+        indxNumDays += 1
+
+# get the stock direction corresponding to net1's data
+for i, day in enumerate(net2_day):
+    if (day in stock_date):
         j = numpy.where(stock_date == day)
-        net1_direction[i] = stock_direction[j]
+        net2_result[i] = stock_direction[j]
+        if (j[0] > 0):
+            net2_yesterdayDirection[i] = stock_direction[j[0]-1]
+            # otherwise it just stays 0
     else:
         print('Either no stock data for that date, or it was a weekend')
-        net1_date[i]=''
-        net1_name[i]=''
-        net1_sentiment[i]=-1
-        net1_direction[i]=-1
-
+        net2_day = numpy.delete(net2_day, i)
+        net2_sentiment = numpy.delete(net2_sentiment, i)
+        net2_result = numpy.delete(net2_result, i)
+        net2_yesterdayDirection = numpy.delete(net2_yesterdayDirection, i)
     
-
+xTrain = numpy.array([net2_sentiment, net2_yesterdayDirection]).transpose()
+yTrain = numpy.array([net2_result]).transpose()
+print('NUM DAYS: ', numDays)
 
 # FIX THIS ON A COMPUTER THAT HAS KERAS
-# net = Sequential()
-# net.add(Dense(units=64, input_dim=dims, activation='relu'))
+net = Sequential()
+net.add(Dense(units=5, input_shape=(2,), activation='relu'))
 # net.add(Dense(units=32, activation='relu'))
-# net.add(Dense(units=1, activation='softmax'))
-# net.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-# net.fit(xTrain, yTrain, epochs=1, batch_size=16, validation_data=(xTest, yTest)
+net.add(Dense(units=1, activation='softmax'))
+net.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+net.fit(xTrain, yTrain, epochs=5, batch_size=2)
+
+xTest = numpy.array([[1, 1], [0, 0], [0.9, 1], [0.3, 0]])
+yTest = numpy.array([1, 0, 1, 0])
+
+scores = net.evaluate(xTest, yTest, batch_size=2)
+print("%s: %.2f%%" % (net.metrics_names[1], scores[1]*100))
